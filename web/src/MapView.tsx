@@ -74,7 +74,7 @@ export default function MapView({ visible, selectedId, selectedSatellite, onSele
               try {
                 const properties = feature.properties ?? {};
                 const contour = String(properties.footprint ?? properties.elevation ?? collection.name);
-                const shape = L.geoJSON(feature, { style: {
+                const shape = L.geoJSON(feature as Parameters<typeof L.geoJSON>[0], { style: {
                   color: satelliteColors[key], weight: elevation ? 1.3 : 1.1,
                   opacity: elevation ? .75 : .9, fillColor: satelliteColors[key],
                   fillOpacity: elevation ? 0 : .11, dashArray: elevation ? '5 4' : undefined
