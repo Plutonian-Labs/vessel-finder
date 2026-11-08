@@ -1,10 +1,9 @@
 /**
- * Illustrative sample data ONLY. No positions or coverage in this file represent
- * current AIS fixes, operational teleports, or verified satellite service.
+ * Illustrative sample vessel/teleport data ONLY.
+ * Satellite overlays are imported separately from the original legacy GIS data.
  */
 export type Vessel = { id: string; name: string; mmsi: string; latitude: number; longitude: number; heading: number; speedKnots: number; destination: string; status: string };
 export type GeoPoint = { name: string; latitude: number; longitude: number; detail: string };
-export type Satellite = GeoPoint & { orbitalSlot: string; coverage: [number, number][] };
 
 export const vessels: Vessel[] = [
   { id: 'demo-1', name: 'DEMO ATLANTIC', mmsi: 'SIM-001', latitude: 26.2, longitude: -79.4, heading: 32, speedKnots: 15.4, destination: 'Nassau (demo)', status: 'Under way' },
@@ -19,8 +18,4 @@ export const ports: GeoPoint[] = [
 ];
 export const teleports: GeoPoint[] = [
   { name: 'Demo teleport — Florida', latitude: 26.5, longitude: -80.65, detail: 'Illustrative location, not an operational facility' }
-];
-export const satellites: Satellite[] = [
-  { name: 'Demo GEO satellite', orbitalSlot: 'Illustrative', latitude: 0, longitude: -65, detail: 'Schematic coverage only; not an RF link-budget model',
-    coverage: [[10,-89],[34,-90],[46,-76],[43,-56],[27,-42],[8,-54],[10,-89]] }
 ];
