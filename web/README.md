@@ -42,3 +42,7 @@ The `predev` and `prebuild` tasks convert the original satellite GIS JavaScript 
 ## Original vessel icon restoration
 
 The asset-import step copies three of the **original** ship graphics from `images/markers/vessels/0.25x` into the frontend's public assets for demonstration company filters. These are fictitious demonstration companies; do not interpret their names, sample coordinates or membership as real cruise-line records. Historical company mappings remain in the legacy database and will require a separate validated import.
+
+## Responsive vessel marker sizing
+
+Ship markers retain the original PNG's 23:7 aspect ratio. Visible sizes are tied to the **map container width** rather than map zoom or browser dimensions: approximately 14 px on compact maps, around 17–21 px on typical desktop maps, capped at 26 px on very wide maps. The transparent clickable target remains 30 × 30 px for usability. Resizing the window or the sidebar updates symbols automatically.

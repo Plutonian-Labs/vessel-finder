@@ -11,6 +11,28 @@ const satelliteColors: Record<SatelliteKey, string> = { anik: '#bc5ee6', eutelsa
 const formatPoint = (latitude: number, longitude: number) => `${latitude.toFixed(3)}°, ${longitude.toFixed(3)}°`;
 const safeText = (value: string) => value.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 
+/**
+ * The legacy ship PNGs are 23 x 7 px, not square. Scale their *visible*
+ * size with the map container width (not zoom level or entire screen width).
+ * Keep a fixed 30 x 30 px hit target so small symbols remain easy to select.
+ */
+function vesselDisplaySize(mapWidth: number): { width: number; height: number } {
+  const width = Math.max(14, Math.min(26, Math.round(14 + (mapWidth - 400) / 120)));
+  return { width, height: Math.round(width * 7 / 23 * 10) / 10 };
+}
+
+function vesselIcon(v: Vessel, mapWidth: number): L.DivIcon {
+  const asset = vesselCompanies.find(company => company.id === v.companyId)?.icon ?? '/legacy/vessels/atlantic.png';
+  const { width, height } = vesselDisplaySize(mapWidth);
+  return L.divIcon({
+    className: 'original-ship-icon',
+    html: `<img src="${asset}" alt="" style="width:${width}px;height:${height}px;transform:rotate(${v.heading}deg)" />`,
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+    popupAnchor: [0, -17]
+  });
+}
+
 function vesselPopup(v: Vessel) {
   return `<div class="map-popup"><strong>${safeText(v.name)}</strong><p>Demo identifier: ${safeText(v.mmsi)}</p><p>Position: ${formatPoint(v.latitude,v.longitude)}</p><p>Course: ${v.heading}° · Speed: ${v.speedKnots} kn</p><p>Destination: ${safeText(v.destination)}</p><small>Simulated data — not live AIS</small></div>`;
 }
@@ -38,14 +60,11 @@ export default function MapView({ visible, selectedId, selectedSatellite, active
       satelliteFootprints: L.layerGroup(), satelliteElevation: L.layerGroup()
     };
     layersRef.current = groups;
+    const initialMapWidth = map.getContainer().clientWidth;
     vessels.forEach(v => {
-      const asset = vesselCompanies.find(company => company.id === v.companyId)?.icon ?? '/legacy/vessels/atlantic.png';
-      const icon = L.divIcon({
-        className: 'original-ship-icon',
-        html: `<img src="${asset}" width="27" height="27" alt="" style="transform:rotate(${v.heading}deg)" />`,
-        iconSize: [30,30], iconAnchor: [15,15]
-      });
-      const marker = L.marker([v.latitude,v.longitude], { icon }).bindPopup(vesselPopup(v));
+      const marker = L.marker([v.latitude, v.longitude], { icon: vesselIcon(v, initialMapWidth) })
+        .bindPopup(vesselPopup(v))
+        .bindTooltip(v.name, { direction: 'top', offset: [0, -13] });
       marker.on('click', () => onSelectRef.current(v.id));
       marker.addTo(groups.vessels);
       markerRef.current.set(v.id, marker);
@@ -56,8 +75,22 @@ export default function MapView({ visible, selectedId, selectedSatellite, active
     teleports.forEach(p => L.circleMarker([p.latitude,p.longitude], {
       radius: 8, color: '#b6bfff', fillColor: '#725bdb', fillOpacity: .85
     }).bindPopup(`<strong>${safeText(p.name)}</strong><p>${safeText(p.detail)}</p>`).addTo(groups.teleports));
+    // Resize only when the *visible* marker size changes (not on every pixel).
+    // The 30px transparent icon hit area does not grow with the artwork.
+    let lastVesselWidth = vesselDisplaySize(initialMapWidth).width;
+    const observer = new ResizeObserver(() => {
+      const mapWidth = map.getContainer().clientWidth;
+      const nextWidth = vesselDisplaySize(mapWidth).width;
+      if (nextWidth !== lastVesselWidth) {
+        lastVesselWidth = nextWidth;
+        vessels.forEach(v => markerRef.current.get(v.id)?.setIcon(vesselIcon(v, mapWidth)));
+      }
+      map.invalidateSize({ pan: false });
+    });
+    observer.observe(map.getContainer());
+
     // Satellite layers are loaded independently below.
-    return () => { map.remove(); mapRef.current = null; layersRef.current = null; markerRef.current.clear(); satelliteRef.current = null; };
+    return () => { observer.disconnect(); map.remove(); mapRef.current = null; layersRef.current = null; markerRef.current.clear(); satelliteRef.current = null; };
   }, []);
 
   useEffect(() => {
