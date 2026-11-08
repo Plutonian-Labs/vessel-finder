@@ -38,3 +38,7 @@ The `predev` and `prebuild` tasks convert the original satellite GIS JavaScript 
 - Per-satellite visibility controls, original map backgrounds and radar
 - Operational AIS adapter, data freshness, backend caching and key protection
 - Unit/UI tests and licensing reviews
+
+## Original vessel icon restoration
+
+The asset-import step copies three of the **original** ship graphics from `images/markers/vessels/0.25x` into the frontend's public assets for demonstration company filters. These are fictitious demonstration companies; do not interpret their names, sample coordinates or membership as real cruise-line records. Historical company mappings remain in the legacy database and will require a separate validated import.

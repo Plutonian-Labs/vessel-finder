@@ -3,7 +3,7 @@
  * This executes the checked-in legacy file in a time-limited VM context with
  * no access to process, filesystem, network or Node built-ins.
  */
-import { readFile, mkdir, writeFile } from 'node:fs/promises';
+import { readFile, mkdir, writeFile, copyFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import vm from 'node:vm';
@@ -54,3 +54,15 @@ await mkdir(path.dirname(outputPath), { recursive: true });
 await writeFile(outputPath, JSON.stringify(payload));
 console.log('Imported historical satellite geometry: ' + Object.entries(collections)
   .map(([, group]) => group.name + ' (' + group.footprints.length + ' footprint / ' + group.elevation.length + ' elevation)').join(', '));
+
+const legacyVesselIcons = {
+  atlantic: 'icon_ship_32-redbluewhite@0.25x.png',
+  pacific: 'icon_ship_25-bluered@0.25x.png',
+  caribbean: 'icon_ship_15-multiorange@0.25x.png'
+};
+const iconDirectory = path.join(webRoot, 'public/legacy/vessels');
+await mkdir(iconDirectory, { recursive: true });
+for (const [name, filename] of Object.entries(legacyVesselIcons)) {
+  await copyFile(path.resolve(webRoot, '../images/markers/vessels/0.25x', filename), path.join(iconDirectory, name + '.png'));
+}
+console.log('Imported original vessel marker graphics for demo company layers');

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
-import { ports, teleports, vessels, type Vessel } from './data';
+import { ports, teleports, vessels, vesselCompanies, type Vessel } from './data';
 
 export type LayerName = 'vessels' | 'ports' | 'teleports' | 'satelliteFootprints' | 'satelliteElevation';
 export type VisibleLayers = Record<LayerName, boolean>;
@@ -14,8 +14,8 @@ const safeText = (value: string) => value.replace(/[&<>"']/g, char => ({ '&': '&
 function vesselPopup(v: Vessel) {
   return `<div class="map-popup"><strong>${safeText(v.name)}</strong><p>Demo identifier: ${safeText(v.mmsi)}</p><p>Position: ${formatPoint(v.latitude,v.longitude)}</p><p>Course: ${v.heading}° · Speed: ${v.speedKnots} kn</p><p>Destination: ${safeText(v.destination)}</p><small>Simulated data — not live AIS</small></div>`;
 }
-export default function MapView({ visible, selectedId, selectedSatellite, onSelect }: {
-  visible: VisibleLayers; selectedId: string | null; selectedSatellite: SatelliteKey | 'all'; onSelect: (id: string) => void
+export default function MapView({ visible, selectedId, selectedSatellite, activeCompanies, onSelect }: {
+  visible: VisibleLayers; selectedId: string | null; selectedSatellite: SatelliteKey | 'all'; activeCompanies: string[]; onSelect: (id: string) => void
 }) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -39,9 +39,11 @@ export default function MapView({ visible, selectedId, selectedSatellite, onSele
     };
     layersRef.current = groups;
     vessels.forEach(v => {
+      const asset = vesselCompanies.find(company => company.id === v.companyId)?.icon ?? '/legacy/vessels/atlantic.png';
       const icon = L.divIcon({
-        className: 'vessel-icon', html: `<span style="transform:rotate(${v.heading}deg)">▲</span>`,
-        iconSize: [28,28], iconAnchor: [14,14]
+        className: 'original-ship-icon',
+        html: `<img src="${asset}" width="27" height="27" alt="" style="transform:rotate(${v.heading}deg)" />`,
+        iconSize: [30,30], iconAnchor: [15,15]
       });
       const marker = L.marker([v.latitude,v.longitude], { icon }).bindPopup(vesselPopup(v));
       marker.on('click', () => onSelectRef.current(v.id));
@@ -131,12 +133,22 @@ export default function MapView({ visible, selectedId, selectedSatellite, onSele
   }, [visible, selectedSatellite]);
 
   useEffect(() => {
+    vessels.forEach(v => {
+      const marker = markerRef.current.get(v.id);
+      const group = layersRef.current?.vessels;
+      if (!marker || !group) return;
+      if (activeCompanies.includes(v.companyId)) group.addLayer(marker);
+      else group.removeLayer(marker);
+    });
+  }, [activeCompanies]);
+
+  useEffect(() => {
     const marker = selectedId && markerRef.current.get(selectedId);
-    if (marker && visible.vessels) {
+    if (marker && visible.vessels && vessels.some(v => v.id === selectedId && activeCompanies.includes(v.companyId))) {
       mapRef.current?.panTo(marker.getLatLng(), { animate: true });
       marker.openPopup();
     }
-  }, [selectedId, visible.vessels]);
+  }, [selectedId, visible.vessels, activeCompanies]);
 
   return <div ref={container} className="map-canvas" aria-label="Interactive maritime demo map" />;
 }
