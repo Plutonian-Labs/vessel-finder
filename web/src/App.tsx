@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import MapView, { type LayerName, type SatelliteKey, type VisibleLayers } from './MapView';
 import { teleports, vessels, vesselCompanies } from './data';
 
-const layerDefinitions: { id: LayerName; label: string; count: number }[] = [
+const layerDefinitions: { id: LayerName; label: string; count: number | string }[] = [
   { id: 'vessels', label: 'Vessels', count: vessels.length },
   { id: 'ports', label: 'World ports (historic)', count: 'WPI' },
   { id: 'teleports', label: 'Teleports', count: teleports.length },
