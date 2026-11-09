@@ -66,3 +66,35 @@ for (const [name, filename] of Object.entries(legacyVesselIcons)) {
   await copyFile(path.resolve(webRoot, '../images/markers/vessels/0.25x', filename), path.join(iconDirectory, name + '.png'));
 }
 console.log('Imported original vessel marker graphics for demo company layers');
+
+/**
+ * Historical port catalog from the original project.
+ * The legacy CSV is headerless: WPI ID, region ID, name, country, lat, lon.
+ * Parsed at build time and shipped as a static, unsynchronized demonstration
+ * catalog; do not represent it as a current operational port database.
+ */
+const worldPortCsv = await readFile(path.resolve(webRoot, '../temp/WPIports.csv'), 'utf8');
+const historicalPorts = worldPortCsv.split(/\r?\n/).filter(Boolean).map(line => {
+  const fields = line.split(',');
+  if (fields.length !== 6) return null;
+  const [id, , name, country, latitudeText, longitudeText] = fields;
+  const latitude = Number(latitudeText), longitude = Number(longitudeText);
+  if (!id || !name || !country || !Number.isFinite(latitude) || !Number.isFinite(longitude) ||
+      Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return null;
+  return { id, name, country, latitude, longitude };
+}).filter(Boolean);
+if (historicalPorts.length < 1000) throw new Error('World port catalog missing or unexpectedly small');
+await writeFile(path.join(webRoot, 'public/data/historical-world-ports.json'), JSON.stringify({
+  source: 'Legacy Vessel Finder temp/WPIports.csv (WPI-derived archive)',
+  status: 'historic-unverified',
+  ports: historicalPorts
+}));
+const portAssetDirectory = path.join(webRoot, 'public/legacy/ports');
+await mkdir(portAssetDirectory, { recursive: true });
+await copyFile(path.resolve(webRoot, '../images/icons/ports-icon.png'),
+  path.join(portAssetDirectory, 'port.png'));
+const teleportAssetDirectory = path.join(webRoot, 'public/legacy/teleports');
+await mkdir(teleportAssetDirectory, { recursive: true });
+await copyFile(path.resolve(webRoot, '../images/markers/antennas/0.1x/antenna_green_01x.png'),
+  path.join(teleportAssetDirectory, 'antenna.png'));
+console.log('Imported historical port catalog: ' + historicalPorts.length + ' records, plus original port and teleport icons');

@@ -1,16 +1,16 @@
 import { useMemo, useState } from 'react';
 import MapView, { type LayerName, type SatelliteKey, type VisibleLayers } from './MapView';
-import { ports, teleports, vessels, vesselCompanies } from './data';
+import { teleports, vessels, vesselCompanies } from './data';
 
 const layerDefinitions: { id: LayerName; label: string; count: number }[] = [
   { id: 'vessels', label: 'Vessels', count: vessels.length },
-  { id: 'ports', label: 'Ports', count: ports.length },
+  { id: 'ports', label: 'World ports (historic)', count: 'WPI' },
   { id: 'teleports', label: 'Teleports', count: teleports.length },
   { id: 'satelliteFootprints', label: 'Satellite footprints', count: 3 },
   { id: 'satelliteElevation', label: 'Elevation contours', count: 3 }
 ];
 const defaults: VisibleLayers = {
-  vessels: true, ports: true, teleports: false, satelliteFootprints: false, satelliteElevation: false
+  vessels: true, ports: false, teleports: false, satelliteFootprints: false, satelliteElevation: false
 };
 
 export default function App() {
@@ -18,6 +18,8 @@ export default function App() {
   const [selectedSatellite, setSelectedSatellite] = useState<SatelliteKey | 'all'>('all');
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [mapMode, setMapMode] = useState<'standard' | 'muted'>('standard');
+  const [mapCommand, setMapCommand] = useState<{ id: number; type: 'reset' | 'fit' }>({ id: 0, type: 'reset' });
   const [activeCompanies, setActiveCompanies] = useState<string[]>(vesselCompanies.map(company => company.id));
   const matches = useMemo(() => vessels.filter(v => activeCompanies.includes(v.companyId) && [v.name,v.mmsi,v.destination].some(x => x.toLowerCase().includes(query.toLowerCase().trim()))), [query, activeCompanies]);
   const selected = vessels.find(v => v.id === selectedId);
@@ -30,6 +32,16 @@ export default function App() {
         <p className="intro">Explore vessels, ports, teleports and satellite coverage in one workspace.</p>
         <label className="field-label" htmlFor="ship-search">Search demonstration vessels</label>
         <input id="ship-search" className="search" value={query} onChange={e=>setQuery(e.target.value)} placeholder="Vessel name, MMSI, destination" />
+        <h2>Map tools</h2>
+        <div className="map-tools">
+          <button type="button" onClick={() => setMapCommand(current => ({ id: current.id + 1, type: 'reset' }))}>Reset view</button>
+          <button type="button" onClick={() => { setVisible(current => ({ ...current, vessels: true })); setMapCommand(current => ({ id: current.id + 1, type: 'fit' })); }}>Fit vessels</button>
+        </div>
+        <label className="field-label satellite-label" htmlFor="map-basemap">Background style</label>
+        <select id="map-basemap" className="search satellite-select" value={mapMode} onChange={e => setMapMode(e.target.value as 'standard' | 'muted')}>
+          <option value="standard">OpenStreetMap — standard</option>
+          <option value="muted">OpenStreetMap — muted</option>
+        </select>
         <h2>Map layers</h2>
         <div className="layer-list">
           {layerDefinitions.map(item => <label className="layer-row" key={item.id}>
@@ -37,6 +49,7 @@ export default function App() {
             <span className="count">{item.count}</span>
           </label>)}
         </div>
+        <p className="data-note">World ports load from the original historic WPI CSV. At map zoom 4+, up to 150 nearby ports display at a time. The catalog is not live.</p>
         <div className="list-heading"><h2>Cruise companies</h2><span>{activeCompanies.length}/{vesselCompanies.length}</span></div>
         <div className="layer-list" aria-label="Vessel company filters">
           {vesselCompanies.map(company => <label className="layer-row" key={company.id}>
@@ -57,9 +70,9 @@ export default function App() {
           <span><strong>{v.name}</strong><small>{vesselCompanies.find(c => c.id === v.companyId)?.name} · {v.speedKnots} kn</small></span><span aria-hidden="true">›</span>
         </button>) : <p className="empty">No demonstration vessels match that search.</p>}</div>
         {selected && <section className="selected-detail"><h2>{selected.name}</h2><p>{selected.status} · {selected.heading}° heading</p><p>Destination: {selected.destination}</p><small>Simulated position, not a current AIS report.</small></section>}
-        <div className="sidebar-footer">Prototype v0.2 · Historic satellite data · No live AIS</div>
+        <div className="sidebar-footer">Prototype v0.5 · Historical WPI ports and satellite GIS · No live AIS</div>
       </aside>
-      <main className="map-panel"><MapView visible={visible} selectedId={selectedId} selectedSatellite={selectedSatellite} activeCompanies={activeCompanies} onSelect={setSelectedId}/><div className="map-notice"><span className="notice-dot"/> SIMULATED VESSELS <span className="notice-separator">·</span> HISTORIC SATELLITE GEOMETRY</div></main>
+      <main className="map-panel"><MapView visible={visible} selectedId={selectedId} selectedSatellite={selectedSatellite} activeCompanies={activeCompanies} mapMode={mapMode} mapCommand={mapCommand} onSelect={setSelectedId}/><div className="map-notice"><span className="notice-dot"/> SIMULATED VESSELS <span className="notice-separator">·</span> HISTORIC SATELLITE GEOMETRY</div></main>
     </div>
   </div>;
 }

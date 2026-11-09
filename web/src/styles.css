@@ -3,3 +3,8 @@
 .satellite-label{margin-top:18px}.satellite-select{appearance:auto;cursor:pointer}.data-note{color:#94b3bf;font-size:11px;line-height:1.55;margin-top:10px}
 
 .original-ship-icon{background:transparent;border:0;display:flex;align-items:center;justify-content:center}.original-ship-icon img{display:block;flex:none;max-width:100%;object-fit:contain;transform-origin:center;filter:drop-shadow(0 1px 2px #09121d99)}.company-icon{object-fit:contain;flex:none}
+
+.map-tools{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.map-tools button{padding:10px 8px;border-radius:7px;border:1px solid #3b6172;background:#153448;color:#d9f0f3;font-size:12px;cursor:pointer}
+.map-tools button:hover,.map-tools button:focus-visible{border-color:#63c9c8;background:#1c4556}
+.map-muted .leaflet-tile-pane{filter:grayscale(.95) contrast(.96) brightness(1.06)}

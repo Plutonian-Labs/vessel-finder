@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
-import { ports, teleports, vessels, vesselCompanies, type Vessel } from './data';
+import { teleports, vessels, vesselCompanies, type Vessel, type PortRecord } from './data';
 
 export type LayerName = 'vessels' | 'ports' | 'teleports' | 'satelliteFootprints' | 'satelliteElevation';
 export type VisibleLayers = Record<LayerName, boolean>;
@@ -36,14 +36,15 @@ function vesselIcon(v: Vessel, mapWidth: number): L.DivIcon {
 function vesselPopup(v: Vessel) {
   return `<div class="map-popup"><strong>${safeText(v.name)}</strong><p>Demo identifier: ${safeText(v.mmsi)}</p><p>Position: ${formatPoint(v.latitude,v.longitude)}</p><p>Course: ${v.heading}° · Speed: ${v.speedKnots} kn</p><p>Destination: ${safeText(v.destination)}</p><small>Simulated data — not live AIS</small></div>`;
 }
-export default function MapView({ visible, selectedId, selectedSatellite, activeCompanies, onSelect }: {
-  visible: VisibleLayers; selectedId: string | null; selectedSatellite: SatelliteKey | 'all'; activeCompanies: string[]; onSelect: (id: string) => void
+export default function MapView({ visible, selectedId, selectedSatellite, activeCompanies, mapMode, mapCommand, onSelect }: {
+  visible: VisibleLayers; selectedId: string | null; selectedSatellite: SatelliteKey | 'all'; activeCompanies: string[]; mapMode: 'standard' | 'muted'; mapCommand: { id: number; type: 'reset' | 'fit' }; onSelect: (id: string) => void
 }) {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layersRef = useRef<Record<LayerName, L.LayerGroup> | null>(null);
   const markerRef = useRef<Map<string, L.Marker>>(new Map());
   const satelliteRef = useRef<Record<SatelliteKey, { footprints: L.LayerGroup; elevation: L.LayerGroup }> | null>(null);
+  const renderPortsRef = useRef<() => void>(() => {});
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
 
@@ -51,10 +52,11 @@ export default function MapView({ visible, selectedId, selectedSatellite, active
     if (!container.current || mapRef.current) return;
     const map = L.map(container.current, { zoomControl: false }).setView([25.5,-75], 5);
     mapRef.current = map;
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors', maxZoom: 18
     }).addTo(map);
-    L.control.zoom({ position: 'bottomright' }).addTo(map);
+    L.control.zoom({ position: 'topright' }).addTo(map);
+    L.control.scale({ position: 'bottomleft', metric: true, imperial: false, maxWidth: 130 }).addTo(map);
     const groups: Record<LayerName, L.LayerGroup> = {
       vessels: L.layerGroup(), ports: L.layerGroup(), teleports: L.layerGroup(),
       satelliteFootprints: L.layerGroup(), satelliteElevation: L.layerGroup()
@@ -69,12 +71,44 @@ export default function MapView({ visible, selectedId, selectedSatellite, active
       marker.addTo(groups.vessels);
       markerRef.current.set(v.id, marker);
     });
-    ports.forEach(p => L.circleMarker([p.latitude,p.longitude], {
-      radius: 6, color: '#081523', fillColor: '#f4b860', fillOpacity: 1, weight: 2
-    }).bindPopup(`<strong>${safeText(p.name)}</strong><p>${safeText(p.detail)}</p>`).addTo(groups.ports));
-    teleports.forEach(p => L.circleMarker([p.latitude,p.longitude], {
-      radius: 8, color: '#b6bfff', fillColor: '#725bdb', fillOpacity: .85
-    }).bindPopup(`<strong>${safeText(p.name)}</strong><p>${safeText(p.detail)}</p>`).addTo(groups.teleports));
+    // Render nearby historical ports only. Keeping a bounded number of
+    // markers on-screen avoids clutter and expensive global DOM layers.
+    let portsCatalog: PortRecord[] = [];
+    let disposed = false;
+    const portIcon = L.icon({
+      iconUrl: '/legacy/ports/port.png', iconSize: [15, 15],
+      iconAnchor: [7, 12], popupAnchor: [0, -12]
+    });
+    const renderVisiblePorts = () => {
+      groups.ports.clearLayers();
+      if (!portsCatalog.length || map.getZoom() < 4) return;
+      const bounds = map.getBounds().pad(0.06);
+      const center = map.getCenter();
+      const nearby = portsCatalog.filter(p => bounds.contains([p.latitude, p.longitude]));
+      nearby.sort((a, b) =>
+        center.distanceTo([a.latitude, a.longitude]) - center.distanceTo([b.latitude, b.longitude]));
+      nearby.slice(0, 150).forEach(p => L.marker([p.latitude, p.longitude], { icon: portIcon })
+        .bindTooltip(p.name)
+        .bindPopup(`<div class="map-popup"><strong>${safeText(p.name)}</strong><p>Country: ${safeText(p.country)} · WPI ID: ${safeText(p.id)}</p><small>Historic, unverified port catalog. Not navigation data.</small></div>`)
+        .addTo(groups.ports));
+    };
+    renderPortsRef.current = renderVisiblePorts;
+    map.on('moveend zoomend', renderVisiblePorts);
+    fetch('/data/historical-world-ports.json').then(response => {
+      if (!response.ok) throw new Error('Historical world ports unavailable');
+      return response.json() as Promise<{ ports: PortRecord[] }>;
+    }).then(payload => {
+      if (disposed) return;
+      portsCatalog = payload.ports;
+      renderVisiblePorts();
+    }).catch(error => { if (!disposed) console.error('Port catalog could not load', error); });
+    const teleportIcon = L.icon({
+      iconUrl: '/legacy/teleports/antenna.png',
+      iconSize: [23, 24], iconAnchor: [11, 22], popupAnchor: [0, -20]
+    });
+    teleports.forEach(p => L.marker([p.latitude, p.longitude], { icon: teleportIcon })
+      .bindPopup(`<div class="map-popup"><strong>${safeText(p.name)}</strong><p>${safeText(p.detail)}</p><small>Demonstration location — not an active teleport listing.</small></div>`)
+      .addTo(groups.teleports));
     // Resize only when the *visible* marker size changes (not on every pixel).
     // The 30px transparent icon hit area does not grow with the artwork.
     let lastVesselWidth = vesselDisplaySize(initialMapWidth).width;
@@ -90,7 +124,14 @@ export default function MapView({ visible, selectedId, selectedSatellite, active
     observer.observe(map.getContainer());
 
     // Satellite layers are loaded independently below.
-    return () => { observer.disconnect(); map.remove(); mapRef.current = null; layersRef.current = null; markerRef.current.clear(); satelliteRef.current = null; };
+    return () => {
+      disposed = true;
+      observer.disconnect();
+      map.off('moveend zoomend', renderVisiblePorts);
+      renderPortsRef.current = () => {};
+      map.remove(); mapRef.current = null; layersRef.current = null;
+      markerRef.current.clear(); satelliteRef.current = null;
+    };
   }, []);
 
   useEffect(() => {
@@ -164,6 +205,26 @@ export default function MapView({ visible, selectedId, selectedSatellite, active
     window.addEventListener('vessel-satellite-loaded', synchronize);
     return () => window.removeEventListener('vessel-satellite-loaded', synchronize);
   }, [visible, selectedSatellite]);
+
+  useEffect(() => {
+    mapRef.current?.getContainer().classList.toggle('map-muted', mapMode === 'muted');
+  }, [mapMode]);
+
+  useEffect(() => {
+    if (mapCommand.id === 0 || !mapRef.current) return;
+    const map = mapRef.current;
+    if (mapCommand.type === 'reset') map.setView([25.5, -75], 5, { animate: true });
+    else {
+      const shown = vessels.filter(v => activeCompanies.includes(v.companyId));
+      if (shown.length) map.fitBounds(L.latLngBounds(shown.map(v => [v.latitude, v.longitude] as [number, number])), {
+        padding: [55, 55], maxZoom: 9, animate: true
+      });
+    }
+  }, [mapCommand]);
+
+  useEffect(() => {
+    if (visible.ports) renderPortsRef.current();
+  }, [visible.ports]);
 
   useEffect(() => {
     vessels.forEach(v => {
